@@ -5,6 +5,7 @@ from shapely.geometry import Polygon
 import requests
 import json
 
+
 def displacement_vertically_down(lat, offset=50.0):
 	# offset is in meter
 	r_earth = 6378137.0
@@ -56,7 +57,7 @@ def generate_horizontal_right_points(lat, lon, right_boundary):
 	return final
 
 
-def get_osm_distance_mapping(origin, destinations):
+def get_osm_distance_mapping(origin, destinations, intercept, slope):
 	# osm url
 	osm_url = "http://ec2-54-251-156-88.ap-southeast-1.compute.amazonaws.com:8001/v1/maps/distancematrix"
 
@@ -74,18 +75,22 @@ def get_osm_distance_mapping(origin, destinations):
 	# print "post data: %s" %(post_data)
 	r = requests.post(osm_url, json = post_data)
 
-	# form custom response
-	# print "here result comes from osm url"
+	### form custom response
+	custom_response = []
 	osm_api_result = r.json()["rows"][0]["elements"]
 
 	dist_iter = 0
-	custom_response = []
 	for dist_map in osm_api_result:
 		p = {
 			"origin": "%s,%s" %(origin[0], origin[1]),
+			"origin_geohash_l7": Geohash.encode(origin[0], origin[1], precision=7),
+			"origin_geohash_l8": Geohash.encode(origin[0], origin[1], precision=8),
 			"destination": "%s,%s" %(destinations[dist_iter][0], destinations[dist_iter][1]),
-			"duration_in_minutes": dist_map["duration_in_minutes"],
-			"distance_in_meters": dist_map["distance_in_meters"]
+			"destination_geohash_l7": Geohash.encode(destinations[dist_iter][0], destinations[dist_iter][1], precision=7),
+			"destination_geohash_l8": Geohash.encode(destinations[dist_iter][0], destinations[dist_iter][1], precision=8),
+			"osm_duration_in_minutes": dist_map["duration_in_minutes"],
+			"distance_in_meters": dist_map["distance_in_meters"],
+			"duration_in_sec_by_de_area_velocity": (((dist_map["distance_in_meters"]/1000) * slope) + intercept) * 60
 		}
 
 		dist_iter = dist_iter + 1
@@ -93,3 +98,80 @@ def get_osm_distance_mapping(origin, destinations):
 		custom_response.append(p)
 
 	return custom_response
+
+# 50m * 50m area, india boundary
+# left = 0, right = 1, top = 0, bottom = 1
+def custom_geohash_base16_encode(lat, lng):
+	# india's boundary
+	min_lat, max_lat = 06.0, 36.0
+	min_lng, max_lng = 68.0, 98.0
+
+	binary = ''
+	result = 0
+	for i in xrange(0, 32):
+		if i % 2 == 0:
+			mid = (min_lng + max_lng) / 2
+			# print "i:%s, min_lng:%s, max_lng:%s, mid:%s" %(i, min_lng, max_lng, mid)
+			if lng < mid:
+				result = result * 2
+				max_lng = mid
+				binary += '0'
+				# print '0'
+			else:
+				result = result * 2 + 1
+				min_lng = mid
+				binary += '1'
+				# print '1'
+		else:
+			mid = (min_lat + max_lat) / 2
+			# print "i:%s, min_lat:%s, max_lat:%s, mid:%s" %(i, min_lat, max_lat, mid)
+			if lat < mid:
+				result = result * 2 + 1
+				max_lat = mid
+				binary += '1'
+				# print '1'
+			else:
+				result = result * 2
+				min_lat = mid
+				binary += '0'
+				# print '0'
+
+	# test
+	print 'binary ', binary
+	print "encode number: ", result 
+	return hex(result)[2:]
+
+# 50m * 50m area, india boundary
+# left = 0, right = 1, top = 0, bottom = 1
+def custom_geohash_base16_decode(geohash):
+	# india's boundary
+	min_lat, max_lat = 06.0, 36.0
+	min_lng, max_lng = 68.0, 98.0
+
+
+	location_point = int(geohash, 16)
+	print "integer of geohash", location_point
+	blocation_point = format(location_point, '0>32b')
+
+	print 'binary of geohash', blocation_point
+
+	for i in xrange(0, 32):
+		if i % 2 == 0:
+			# lng
+			mid = ( min_lng + max_lng ) / 2
+			# print "binary: %s, i:%s, min_lng:%s, max_lng:%s, mid:%s" %(blocation_point[i], i, min_lng, max_lng, mid)
+			if blocation_point[i] == '0':
+				max_lng = mid						
+			else:
+				min_lng = mid
+		else:
+			# lat
+			mid = (min_lat + max_lat ) / 2
+			# print "binary:%s, i:%s, min_lat:%s, max_lat:%s, mid:%s" %(blocation_point[i], i, min_lat, max_lat, mid)
+			if blocation_point[i] == '1':
+				max_lat = mid
+			else:
+				min_lat = mid
+
+	
+	return (( min_lat + max_lat ) / 2, ( min_lng + max_lng ) / 2)

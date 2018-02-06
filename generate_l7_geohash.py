@@ -1,3 +1,8 @@
+# following tasks are done in this script 
+# 1. Given a area polygon, it will generate points inside polygon having vertical and horizontal displacement as set
+# 2. It will create mapping of each point inside polygon with level 4 (varible) neighbour points and store distance between them
+# by calculating from OSM endpoint
+
 import Geohash
 from shapely.geometry import Point
 from shapely.geometry import Polygon
@@ -21,8 +26,6 @@ kormangala_polygon = Polygon([(12.949705,77.62063699999999), (12.9499340325728,7
 sum_ = 0
 kormangala_l7_file_handle = open('kormangala_l7.txt', 'w')
 
-
-
 w_iter = 0
 h_iter = 0
 
@@ -30,6 +33,9 @@ kormangala_points = []
 
 total_osm_map = []
 graph_string = ""
+
+kormangala_last_mile_intercept = 8.30
+kormangala_last_mile_slope = 2.67
 ####
 
 # test
@@ -90,8 +96,8 @@ print sum_
 i, j = 0, 0
 for i in range(h_iter):
 	for j in range(w_iter):
-		osm_destination = []
-		osm_origin = Matrix[i][j]
+		destinations = []
+		origin = Matrix[i][j]
 		# if Matrix[i][j] in kormangala_points: Checking in kormangala points list is slower than checking whether point lies in polygon
 		# process only on kormangala points
 		if kormangala_polygon.contains(Point(Matrix[i][j])):
@@ -101,22 +107,39 @@ for i in range(h_iter):
 			# find mapping till 4 level
 			for level in range(1, 5):
 				if (i + level) < h_iter and kormangala_polygon.contains(Point(Matrix[i + level][j])):
-					osm_destination.append(Matrix[i + level][j])
+					destinations.append(Matrix[i + level][j])
 
 				if (i - level) > -1 and kormangala_polygon.contains(Point(Matrix[i - level][j])):
-					osm_destination.append(Matrix[i - level][j])
+					destinations.append(Matrix[i - level][j])
 
 				if (j + level) < w_iter and kormangala_polygon.contains(Point(Matrix[i][j + level])):
-					osm_destination.append(Matrix[i][j + level])
+					destinations.append(Matrix[i][j + level])
 
 				if (j - level) > -1 and kormangala_polygon.contains(Point(Matrix[i][j - level])):
-					osm_destination.append(Matrix[i][j - level])
+					destinations.append(Matrix[i][j - level])
+
+				# diagonal left bottom
+				if  (i - level) > -1 and (j - level) > -1 and kormangala_polygon.contains(Point(Matrix[i - level][j - level])):
+					destinations.append(Matrix[i - level][j - level])
+
+				# diagonal left top
+				if  (i - level) > -1 and (j + level) < w_iter -1 and kormangala_polygon.contains(Point(Matrix[i - level][j + level])):
+					destinations.append(Matrix[i - level][j + level])
+
+				# diagonal right bottom
+				if  (i + level) < h_iter and (j - level) > -1 and kormangala_polygon.contains(Point(Matrix[i + level][j - level])):
+					destinations.append(Matrix[i + level][j - level])
+
+				# diagonal right top
+				if  (i + level) < h_iter and (j + level) < w_iter and kormangala_polygon.contains(Point(Matrix[i + level][j + level])):
+					destinations.append(Matrix[i + level][j + level])
 		else:
 			graph_string += "  "
-		if len(osm_destination) > 0:
+		if len(destinations) > 0:
 			print "Hitting OSM"
-			osm_result = get_osm_distance_mapping(osm_origin, osm_destination)
+			osm_result = get_osm_distance_mapping(origin, destinations, kormangala_last_mile_intercept, kormangala_last_mile_slope)
 			total_osm_map = total_osm_map + osm_result
+
 
 	graph_string += "\n"
 
@@ -126,4 +149,5 @@ with open('kormangala_point_graph.txt', 'w') as outfile:
 
 with open('osm_mapping_50_by_50_metrix.txt', 'w') as outfile:
     json.dump(total_osm_map, outfile, indent=4)
+
 
