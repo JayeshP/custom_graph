@@ -5,6 +5,20 @@ from shapely.geometry import Polygon
 import requests
 import json
 
+class Geohash_L8:
+
+	def generate_vertically_down_geohash(start_geohash, bottom_boundary):
+		result = []
+		while True:
+			result.append(start_geohash)
+
+	def generate_horizontal_right_geohash(start_geohash, right_boundary):
+		result = []
+		while True:
+			result.append(start_geohash)
+
+	def neighbors(self, geohash):
+		passs
 
 def displacement_vertically_down(lat, offset=50.0):
 	# offset is in meter
@@ -70,11 +84,12 @@ def get_osm_distance_mapping(origin, destinations, intercept, slope):
 		"destinations": destination_string_list,
 		"vehicleType": "bike"
 	}
-
 	# send request to osm
 	# print "post data: %s" %(post_data)
+
 	r = requests.post(osm_url, json = post_data)
 
+	# print r.json()
 	### form custom response
 	custom_response = []
 	osm_api_result = r.json()["rows"][0]["elements"]
@@ -83,14 +98,15 @@ def get_osm_distance_mapping(origin, destinations, intercept, slope):
 	for dist_map in osm_api_result:
 		p = {
 			"origin": "%s,%s" %(origin[0], origin[1]),
-			"origin_geohash_l7": Geohash.encode(origin[0], origin[1], precision=7),
-			"origin_geohash_l8": Geohash.encode(origin[0], origin[1], precision=8),
+			"origin_geohash_l7": Geohash.encode(float(origin[0]), float(origin[1]), precision=7),
+			"origin_geohash_l8": Geohash.encode(float(origin[0]), float(origin[1]), precision=8),
 			"destination": "%s,%s" %(destinations[dist_iter][0], destinations[dist_iter][1]),
-			"destination_geohash_l7": Geohash.encode(destinations[dist_iter][0], destinations[dist_iter][1], precision=7),
-			"destination_geohash_l8": Geohash.encode(destinations[dist_iter][0], destinations[dist_iter][1], precision=8),
+			"destination_geohash_l7": Geohash.encode(float(destinations[dist_iter][0]), float(destinations[dist_iter][1]), precision=7),
+			"destination_geohash_l8": Geohash.encode(float(destinations[dist_iter][0]), float(destinations[dist_iter][1]), precision=8),
 			"osm_duration_in_minutes": dist_map["duration_in_minutes"],
 			"distance_in_meters": dist_map["distance_in_meters"],
-			"duration_in_sec_by_de_area_velocity": (((dist_map["distance_in_meters"]/1000) * slope) + intercept) * 60
+			"duration_in_sec_by_de_area_velocity_and_intercept": (((float(dist_map["distance_in_meters"])/1000) * slope) + intercept) * 60,
+			"duration_in_sec_by_de_area_velocity": ((float(dist_map["distance_in_meters"])/1000) * slope) * 60
 		}
 
 		dist_iter = dist_iter + 1
@@ -106,8 +122,8 @@ def custom_geohash_base16_encode(lat, lng):
 	min_lat, max_lat = 06.0, 36.0
 	min_lng, max_lng = 68.0, 98.0
 
-	binary = ''
 	result = 0
+	# lat and lng are 16 bit so commutative is 32 bit
 	for i in xrange(0, 32):
 		if i % 2 == 0:
 			mid = (min_lng + max_lng) / 2
@@ -115,29 +131,20 @@ def custom_geohash_base16_encode(lat, lng):
 			if lng < mid:
 				result = result * 2
 				max_lng = mid
-				binary += '0'
-				# print '0'
 			else:
 				result = result * 2 + 1
 				min_lng = mid
-				binary += '1'
-				# print '1'
 		else:
 			mid = (min_lat + max_lat) / 2
 			# print "i:%s, min_lat:%s, max_lat:%s, mid:%s" %(i, min_lat, max_lat, mid)
 			if lat < mid:
 				result = result * 2 + 1
 				max_lat = mid
-				binary += '1'
-				# print '1'
 			else:
 				result = result * 2
 				min_lat = mid
-				binary += '0'
-				# print '0'
 
 	# test
-	print 'binary ', binary
 	print "encode number: ", result 
 	return hex(result)[2:]
 
@@ -155,6 +162,7 @@ def custom_geohash_base16_decode(geohash):
 
 	print 'binary of geohash', blocation_point
 
+	# lat and lng are 16 bit so commutative is 32 bit
 	for i in xrange(0, 32):
 		if i % 2 == 0:
 			# lng
